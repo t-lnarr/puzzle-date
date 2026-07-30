@@ -175,6 +175,7 @@ h2 { font-size: 22px; margin-bottom: 16px; }
   background: #000;
   border: 4px solid white;
   box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  transform: scaleX(-1); /* mirror the feed horizontally (natural, mirror-like view) */
 }
 #videos video.border-blue { border-color: #3b82f6; box-shadow: 0 0 14px rgba(59,130,246,0.6); }
 #videos video.border-red  { border-color: #ef4444; box-shadow: 0 0 14px rgba(239,68,68,0.6); }
