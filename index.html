@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Birlikte Puzzle</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<style>
+  :root{
+    --ink:#2b2a27;
+    --paper:#faf7f0;
+    --line:#e4ddd0;
+    --accent:#c9622b;
+    --accent-2:#3d6b5c;
+    --panel:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overscroll-behavior:none;
+  }
+  .screen{
+    min-height:100dvh;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;gap:16px;
+  }
+  .hidden{display:none !important;}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px;text-align:center;}
+  p.sub{color:#7a756a;font-size:14px;text-align:center;margin:0 0 8px;max-width:320px;}
+  input[type=text]{
+    width:100%;max-width:280px;padding:14px 16px;border-radius:12px;
+    border:1px solid var(--line);font-size:16px;background:var(--panel);
+    text-align:center;letter-spacing:1px;
+  }
+  button{
+    padding:14px 20px;border-radius:12px;border:none;font-size:16px;font-weight:600;
+    cursor:pointer;background:var(--accent);color:#fff;width:100%;max-width:280px;
+    transition:transform .1s ease;
+  }
+  button:active{transform:scale(0.97);}
+  button.secondary{background:var(--panel);color:var(--ink);border:1px solid var(--line);}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:24px;width:100%;max-width:340px;display:flex;flex-direction:column;
+    gap:12px;align-items:center;
+  }
+  .room-code{
+    font-size:32px;font-weight:700;letter-spacing:4px;color:var(--accent);
+    padding:12px 20px;border:2px dashed var(--line);border-radius:12px;
+  }
+  .status-dot{width:8px;height:8px;border-radius:50%;background:#c9622b;display:inline-block;margin-right:6px;animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* ---- Puzzle select ---- */
+  .puzzle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;}
+  .puzzle-thumb{
+    position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1/1;
+    border:2px solid transparent;cursor:pointer;background-size:cover;background-position:center;
+  }
+  .puzzle-thumb.selected{border-color:var(--accent);}
+  .difficulty-row{display:flex;gap:8px;width:100%;}
+  .difficulty-row button{flex:1;padding:10px;font-size:14px;}
+  .difficulty-row button.active{background:var(--accent-2);}
+  .difficulty-row button.secondary.active{background:var(--accent-2);color:#fff;border-color:var(--accent-2);}
+
+  /* ---- Game screen ---- */
+  #game-screen{padding:8px;justify-content:flex-start;min-height:100dvh;}
+  .topbar{
+    width:100%;max-width:520px;display:flex;justify-content:space-between;
+    align-items:center;padding:6px 4px;font-size:13px;color:#7a756a;
+  }
+  #playfield-wrap{
+    width:100%;max-width:520px;aspect-ratio:1/1;position:relative;
+    background:#f1ede3;border-radius:16px;border:1px solid var(--line);
+    overflow:hidden;touch-action:none;
+  }
+  #board{
+    position:absolute;left:15%;top:15%;width:70%;height:70%;
+    background:rgba(0,0,0,0.03);border-radius:6px;
+  }
+  .slot{
+    position:absolute;border:1px dashed #c9c2b0;box-sizing:border-box;
+  }
+  .piece{
+    position:absolute;box-sizing:border-box;
+    background-repeat:no-repeat;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    border-radius:2px;cursor:grab;z-index:5;
+  }
+  .piece.locked{
+    box-shadow:none;border-radius:0;cursor:default;z-index:1;
+  }
+  .cams{
+    position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:8px;z-index:20;
+  }
+  .cam-bubble{
+    width:88px;height:88px;border-radius:50%;overflow:hidden;border:2px solid #fff;
+    box-shadow:0 2px 10px rgba(0,0,0,0.3);position:absolute;touch-action:none;background:#333;
+  }
+  .cam-bubble video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  .cam-label{
+    position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:9px;
+    color:#fff;background:rgba(0,0,0,0.4);
+  }
+  .win-overlay{
+    position:absolute;inset:0;background:rgba(250,247,240,0.95);z-index:50;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    text-align:center;padding:20px;
+  }
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;padding:10px 18px;border-radius:20px;
+    font-size:13px;z-index:100;opacity:0;transition:opacity .3s;pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+  a{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<!-- ===== EKRAN 1: BAĞLANTI ===== -->
+<div id="connect-screen" class="screen">
+  <h1>Birlikte puzzle</h1>
+  <p class="sub">Bir oda kur ya da arkadaşının kodunu gir. İkiniz bağlanınca kamera ve puzzle ekranı açılır.</p>
+
+  <div class="card">
+    <input type="text" id="name-input" placeholder="Adın" maxlength="16">
+    <button id="create-room-btn">Oda kur</button>
+    <div style="color:#b9b2a2;font-size:12px;">— ya da —</div>
+    <input type="text" id="join-code-input" placeholder="ODA KODU" maxlength="6">
+    <button id="join-room-btn" class="secondary">Odaya katıl</button>
+  </div>
+  <p id="connect-error" class="sub" style="color:#c0392b;"></p>
+</div>
+
+<!-- ===== EKRAN 2: BEKLEME (oda kurulunca) ===== -->
+<div id="waiting-screen" class="screen hidden">
+  <h1>Odan hazır</h1>
+  <p class="sub">Bu kodu arkadaşına gönder, o kodu girip katılsın.</p>
+  <div class="room-code" id="room-code-display"></div>
+  <p class="sub"><span class="status-dot"></span>Bağlantı bekleniyor…</p>
+  <button class="secondary" id="cancel-room-btn">Vazgeç</button>
+</div>
+
+<!-- ===== EKRAN 3: PUZZLE SEÇ ===== -->
+<div id="select-screen" class="screen hidden">
+  <h1>Puzzle seç</h1>
+  <p class="sub" id="select-sub">Bağlandınız! Bir görsel ve zorluk seçip başlat.</p>
+  <div class="card">
+    <div class="puzzle-grid" id="puzzle-grid"></div>
+    <div class="difficulty-row" id="difficulty-row">
+      <button class="secondary" data-size="3">3×3 kolay</button>
+      <button class="secondary" data-size="4">4×4 orta</button>
+      <button class="secondary" data-size="5">5×5 zor</button>
+    </div>
+    <button id="start-puzzle-btn">Başlat</button>
+  </div>
+</div>
+
+<!-- ===== EKRAN 4: OYUN ===== -->
+<div id="game-screen" class="screen hidden">
+  <div class="topbar">
+    <span id="game-status">Bağlı</span>
+    <button class="secondary" style="width:auto;padding:6px 12px;font-size:12px;" id="change-puzzle-btn">Puzzle değiştir</button>
+  </div>
+  <div id="playfield-wrap">
+    <div id="board"></div>
+    <div class="cams" id="cams"></div>
+    <div id="win-overlay" class="win-overlay hidden">
+      <h1>Tamamlandı! 🎉</h1>
+      <p class="sub">Puzzle'ı birlikte bitirdiniz.</p>
+      <button id="play-again-btn">Yeni puzzle</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   BÖLÜM 1: Genel durum ve yardımcılar
+   ===================================================================== */
+const state = {
+  myName: '',
+  isHost: false,
+  roomCode: '',
+  peer: null,
+  conn: null,       // data connection
+  call: null,       // media connection
+  localStream: null,
+  puzzle: null,     // {imageUrl, size}
+  pieces: {},       // id -> {row,col,locked}
+};
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function randomCode(len=4){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='';
+  for(let i=0;i<len;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+/* =====================================================================
+   BÖLÜM 2: Bağlantı (PeerJS) — oda kurma / katılma
+   ===================================================================== */
+const PEER_PREFIX = 'birlikte-puzzle-'; // çakışmayı azaltmak için basit bir namespace
+
+document.getElementById('create-room-btn').onclick = () => {
+  state.myName = document.getElementById('name-input').value.trim() || 'Sen';
+  const code = randomCode();
+  state.roomCode = code;
+  state.isHost = true;
+  document.getElementById('room-code-display').textContent = code;
+  showScreen('waiting-screen');
+
+  state.peer = new Peer(PEER_PREFIX + code);
+  state.peer.on('open', () => {});
+  state.peer.on('error', (err) => {
+    console.error(err);
+    if(err.type === 'unavailable-id'){
+      toast('Bu kod alınmış, tekrar deniyorum…');
+      document.getElementById('create-room-btn').onclick();
+    }
+  });
+  // Karşı taraf veri bağlantısı kurunca
+  state.peer.on('connection', (conn) => {
+    state.conn = conn;
+    setupDataConnection();
+  });
+  // Karşı taraf görüntülü arama başlatınca (biz cevaplarız)
+  state.peer.on('call', (call) => {
+    ensureLocalStream().then(stream => {
+      call.answer(stream);
+      state.call = call;
+      call.on('stream', remoteStream => addRemoteVideo(remoteStream));
+    });
+  });
+};
+
+document.getElementById('join-room-btn').onclick = () => {
+  state.myName = document.getElementById('name-input').value.trim() || 'Sen';
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if(!code){ document.getElementById('connect-error').textContent = 'Lütfen bir oda kodu gir.'; return; }
+  state.roomCode = code;
+  state.isHost = false;
+
+  state.peer = new Peer();
+  state.peer.on('open', async () => {
+    const hostId = PEER_PREFIX + code;
+    state.conn = state.peer.connect(hostId);
+    setupDataConnection();
+
+    const stream = await ensureLocalStream();
+    state.call = state.peer.call(hostId, stream);
+    state.call.on('stream', remoteStream => addRemoteVideo(remoteStream));
+  });
+  state.peer.on('error', (err) => {
+    console.error(err);
+    document.getElementById('connect-error').textContent = 'Bağlanılamadı, kodu kontrol et.';
+  });
+};
+
+document.getElementById('cancel-room-btn').onclick = () => {
+  if(state.peer) state.peer.destroy();
+  showScreen('connect-screen');
+};
+
+function setupDataConnection(){
+  state.conn.on('open', () => {
+    toast('Bağlandı!');
+    showScreen('select-screen');
+    renderPuzzleGrid();
+  });
+  state.conn.on('data', handleRemoteMessage);
+  state.conn.on('close', () => toast('Bağlantı kesildi.'));
+}
+
+function sendData(msg){
+  if(state.conn && state.conn.open) state.conn.send(msg);
+}
+
+async function ensureLocalStream(){
+  if(state.localStream) return state.localStream;
+  try{
+    state.localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+    addLocalVideo(state.localStream);
+  }catch(e){
+    console.warn('Kamera/mikrofon alınamadı:', e);
+    toast('Kamera izni verilmedi, sesli/görüntülü olmadan devam ediliyor.');
+  }
+  return state.localStream;
+}
+
+/* =====================================================================
+   BÖLÜM 3: Kamera balonları (sürüklenebilir, her kullanıcı kendi
+   ekranında konumlandırır — konum diğer tarafa senkron edilmez)
+   ===================================================================== */
+function addLocalVideo(stream){
+  addVideoBubble('me', stream, state.myName || 'Sen', {left:'8px', top:'8px'}, true);
+}
+function addRemoteVideo(stream){
+  addVideoBubble('peer', stream, 'Eşleşme', {left:'8px', top:'104px'}, true);
+}
+function addVideoBubble(id, stream, label, pos, mine){
+  if(document.getElementById('cam-'+id)) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'cam-bubble';
+  wrap.id = 'cam-'+id;
+  wrap.style.left = pos.left; wrap.style.top = pos.top;
+  wrap.innerHTML = `<video autoplay playsinline ${mine?'muted':''}></video><div class="cam-label">${label}</div>`;
+  document.getElementById('cams').appendChild(wrap);
+  const v = wrap.querySelector('video');
+  v.srcObject = stream;
+  if(id==='me') v.style.transform='scaleX(-1)'; else v.style.transform='none';
+  makeCamDraggable(wrap);
+}
+function makeCamDraggable(el){
+  let dragging=false, sx=0, sy=0, ol=0, ot=0;
+  const wrapRect = () => document.getElementById('playfield-wrap').getBoundingClientRect();
+  el.addEventListener('pointerdown', e=>{
+    dragging=true; el.setPointerCapture(e.pointerId);
+    sx=e.clientX; sy=e.clientY;
+    ol=el.offsetLeft; ot=el.offsetTop;
+  });
+  el.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const r = wrapRect();
+    let nl = ol + (e.clientX - sx);
+    let nt = ot + (e.clientY - sy);
+    nl = Math.max(0, Math.min(r.width-88, nl));
+    nt = Math.max(0, Math.min(r.height-88, nt));
+    el.style.left = nl+'px'; el.style.top = nt+'px';
+  });
+  el.addEventListener('pointerup', ()=> dragging=false);
+}
+
+/* =====================================================================
+   BÖLÜM 4: Puzzle seçim ekranı
+   ===================================================================== */
+const PRESET_IMAGES = [
+  'https://picsum.photos/id/1015/600/600',
+  'https://picsum.photos/id/1039/600/600',
+  'https://picsum.photos/id/1043/600/600',
+  'https://picsum.photos/id/1069/600/600',
+];
+let selectedImage = PRESET_IMAGES[0];
+let selectedSize = 3;
+
+function renderPuzzleGrid(){
+  const grid = document.getElementById('puzzle-grid');
+  grid.innerHTML = '';
+  PRESET_IMAGES.forEach(url=>{
+    const d = document.createElement('div');
+    d.className = 'puzzle-thumb' + (url===selectedImage?' selected':'');
+    d.style.backgroundImage = `url(${url})`;
+    d.onclick = () => { selectedImage = url; renderPuzzleGrid(); };
+    grid.appendChild(d);
+  });
+  document.querySelectorAll('#difficulty-row button').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.size)===selectedSize);
+  });
+}
+document.querySelectorAll('#difficulty-row button').forEach(b=>{
+  b.onclick = () => { selectedSize = parseInt(b.dataset.size); renderPuzzleGrid(); };
+});
+document.getElementById('start-puzzle-btn').onclick = () => {
+  startPuzzle(selectedImage, selectedSize);
+  sendData({type:'start', imageUrl:selectedImage, size:selectedSize});
+};
+document.getElementById('change-puzzle-btn').onclick = () => {
+  showScreen('select-screen');
+};
+document.getElementById('play-again-btn').onclick = () => {
+  document.getElementById('win-overlay').classList.add('hidden');
+  showScreen('select-screen');
+};
+
+/* =====================================================================
+   BÖLÜM 5: Puzzle tahtası — parçaları oluşturma, sürükleme, kilitleme
+   ===================================================================== */
+const BOARD_PCT = 70; // board genişliği/yüksekliği, playfield'in yüzdesi
+const BOARD_OFFSET = 15; // board sol/üst offseti, playfield'in yüzdesi
+const SNAP_THRESHOLD = 4; // yüzde cinsinden yakalama mesafesi
+
+function startPuzzle(imageUrl, size){
+  state.puzzle = { imageUrl, size };
+  state.pieces = {};
+  showScreen('game-screen');
+  buildBoard(imageUrl, size);
+}
+
+function buildBoard(imageUrl, size){
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  document.getElementById('win-overlay').classList.add('hidden');
+
+  const cellPct = BOARD_PCT / size; // her hücrenin playfield yüzdesi cinsinden genişliği
+
+  // Görsel referans için hafif slot çizgileri
+  for(let r=0;r<size;r++){
+    for(let c=0;c<size;c++){
+      const slot = document.createElement('div');
+      slot.className='slot';
+      slot.style.left = (c*cellPct)+'%';
+      slot.style.top = (r*cellPct)+'%';
+      slot.style.width = cellPct+'%';
+      slot.style.height = cellPct+'%';
+      board.appendChild(slot);
+    }
+  }
+
+  // Parçaları oluştur ve rastgele dağıt
+  const wrap = document.getElementById('playfield-wrap');
+  // önce eski parçaları temizle
+  wrap.querySelectorAll('.piece').forEach(p=>p.remove());
+
+  for(let r=0;r<size;r++){
+    for(let c=0;c<size;c++){
+      const id = r+'-'+c;
+      const piece = document.createElement('div');
+      piece.className='piece';
+      piece.dataset.id = id;
+      piece.style.width = cellPct+'%';
+      piece.style.height = cellPct+'%';
+      piece.style.backgroundImage = `url(${imageUrl})`;
+      piece.style.backgroundSize = `${size*100}% ${size*100}%`;
+      piece.style.backgroundPosition = `${size>1 ? c*100/(size-1) : 0}% ${size>1 ? r*100/(size-1) : 0}%`;
+
+      // rastgele başlangıç konumu (playfield içinde, board dışında olması şart değil)
+      const randLeft = Math.random()*(100-cellPct);
+      const randTop = Math.random()*(100-cellPct);
+      piece.style.left = randLeft+'%';
+      piece.style.top = randTop+'%';
+
+      state.pieces[id] = {
+        row:r, col:c, locked:false,
+        correctLeft: BOARD_OFFSET + c*cellPct,
+        correctTop: BOARD_OFFSET + r*cellPct,
+      };
+
+      makePieceDraggable(piece);
+      wrap.appendChild(piece);
+    }
+  }
+}
+
+function makePieceDraggable(piece){
+  let dragging=false, sx=0, sy=0, ol=0, ot=0;
+  const wrap = document.getElementById('playfield-wrap');
+
+  piece.addEventListener('pointerdown', e=>{
+    const id = piece.dataset.id;
+    if(state.pieces[id].locked) return;
+    dragging = true;
+    piece.setPointerCapture(e.pointerId);
+    piece.style.zIndex = 30;
+    sx = e.clientX; sy = e.clientY;
+    ol = parseFloat(piece.style.left); ot = parseFloat(piece.style.top);
+  });
+
+  piece.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const rect = wrap.getBoundingClientRect();
+    const dxPct = (e.clientX - sx) / rect.width * 100;
+    const dyPct = (e.clientY - sy) / rect.height * 100;
+    const nl = ol + dxPct, nt = ot + dyPct;
+    piece.style.left = nl+'%';
+    piece.style.top = nt+'%';
+    throttledBroadcastMove(piece.dataset.id, nl, nt, false);
+  });
+
+  piece.addEventListener('pointerup', e=>{
+    if(!dragging) return;
+    dragging = false;
+    piece.style.zIndex = 5;
+    const id = piece.dataset.id;
+    const info = state.pieces[id];
+    const curLeft = parseFloat(piece.style.left);
+    const curTop = parseFloat(piece.style.top);
+    const dist = Math.hypot(curLeft-info.correctLeft, curTop-info.correctTop);
+    if(dist < SNAP_THRESHOLD){
+      piece.style.left = info.correctLeft+'%';
+      piece.style.top = info.correctTop+'%';
+      piece.classList.add('locked');
+      info.locked = true;
+      sendData({type:'lock', id, left:info.correctLeft, top:info.correctTop});
+      checkWin();
+    } else {
+      sendData({type:'move', id, left:curLeft, top:curTop, final:true});
+    }
+  });
+}
+
+let lastMoveSent = 0;
+function throttledBroadcastMove(id, left, top){
+  const now = Date.now();
+  if(now - lastMoveSent < 60) return;
+  lastMoveSent = now;
+  sendData({type:'move', id, left, top, final:false});
+}
+
+function checkWin(){
+  const ids = Object.keys(state.pieces);
+  if(ids.every(id=>state.pieces[id].locked)){
+    setTimeout(()=>document.getElementById('win-overlay').classList.remove('hidden'), 300);
+  }
+}
+
+/* =====================================================================
+   BÖLÜM 6: Karşı taraftan gelen mesajları işleme
+   ===================================================================== */
+function handleRemoteMessage(msg){
+  if(msg.type === 'start'){
+    startPuzzle(msg.imageUrl, msg.size);
+  } else if(msg.type === 'move'){
+    const piece = document.querySelector(`.piece[data-id="${msg.id}"]`);
+    if(!piece) return;
+    const info = state.pieces[msg.id];
+    if(info.locked) return;
+    piece.style.left = msg.left+'%';
+    piece.style.top = msg.top+'%';
+  } else if(msg.type === 'lock'){
+    const piece = document.querySelector(`.piece[data-id="${msg.id}"]`);
+    if(!piece) return;
+    const info = state.pieces[msg.id];
+    piece.style.left = msg.left+'%';
+    piece.style.top = msg.top+'%';
+    piece.classList.add('locked');
+    info.locked = true;
+    checkWin();
+  }
+}
+</script>
+</body>
+</html>

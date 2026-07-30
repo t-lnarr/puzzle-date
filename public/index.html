@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>İkimizin Puzzle'ı</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="screen-landing" class="screen active">
+  <div class="card">
+    <h1>💕 İkimizin Puzzle'ı</h1>
+    <p class="subtitle">Birlikte görüntülü bağlanın, puzzle çözün.</p>
+
+    <button id="btn-create" class="btn primary">Oda Kur</button>
+
+    <div class="divider">veya</div>
+
+    <div class="join-box">
+      <input id="input-code" maxlength="5" placeholder="ODA KODU" autocomplete="off" />
+      <button id="btn-join" class="btn secondary">Katıl</button>
+    </div>
+
+    <p id="landing-error" class="error"></p>
+  </div>
+</div>
+
+<div id="screen-waiting" class="screen">
+  <div class="card">
+    <h2>Oda kuruldu 🎉</h2>
+    <p>Bu kodu partnerine gönder:</p>
+    <div class="room-code" id="room-code-display">-----</div>
+    <p class="hint">Karşı taraf katılınca otomatik başlayacak.</p>
+    <div class="spinner"></div>
+  </div>
+</div>
+
+<div id="screen-select" class="screen">
+  <div class="card wide">
+    <h2>Puzzle Seç</h2>
+    <div id="select-controls">
+      <div class="puzzle-choices" id="puzzle-choices">
+        <div class="puzzle-choice" data-key="sunset">
+          <img src="images/sunset.png" />
+          <span>Gün Batımı</span>
+        </div>
+        <div class="puzzle-choice" data-key="ocean">
+          <img src="images/ocean.png" />
+          <span>Okyanus</span>
+        </div>
+        <div class="puzzle-choice" data-key="abstract">
+          <img src="images/abstract.png" />
+          <span>Soyut</span>
+        </div>
+        <div class="puzzle-choice puzzle-upload" id="puzzle-upload-tile">
+          <div class="upload-placeholder">
+            <span class="upload-icon">📷</span>
+          </div>
+          <span>Kendi Fotoğrafın</span>
+        </div>
+        <input type="file" id="input-custom-image" accept="image/*" hidden />
+      </div>
+      <p id="upload-status" class="upload-status"></p>
+      <div class="grid-size-select">
+        <span>Zorluk:</span>
+        <button class="grid-btn" data-size="5">Kolay (5x5)</button>
+        <button class="grid-btn active" data-size="10">Normal (10x10)</button>
+        <button class="grid-btn" data-size="15">Zor (15x15)</button>
+      </div>
+      <button id="btn-start-game" class="btn primary" style="margin-top:20px;">Oyunu Başlat 🎮</button>
+    </div>
+    <p id="select-waiting-hint" class="hint" style="display:none;">Partnerin puzzle'ı seçiyor, birazdan başlıyoruz 💕</p>
+  </div>
+</div>
+
+<div id="screen-game" class="screen">
+  <div id="videos">
+    <video id="video-local" autoplay muted playsinline></video>
+    <div id="tools-panel">
+      <div id="timer">00:00</div>
+      <button id="btn-emoji" class="tool-btn" title="Emoji gönder">😊</button>
+      <button id="btn-draw" class="tool-btn" title="Kalem">✏️</button>
+    </div>
+    <video id="video-remote" autoplay playsinline></video>
+  </div>
+
+  <div id="emoji-picker" class="floating-picker">
+    <button class="emoji-opt" data-emoji="😂">😂</button>
+    <button class="emoji-opt" data-emoji="😤">😤</button>
+    <button class="emoji-opt" data-emoji="😭">😭</button>
+    <button class="emoji-opt" data-emoji="🥰">🥰</button>
+    <button class="emoji-opt" data-emoji="😁">😁</button>
+    <button class="emoji-opt" data-emoji="🤙">🤙</button>
+    <button class="emoji-opt" data-emoji="👍">👍</button>
+    <button class="emoji-opt" data-emoji="🖕">🖕</button>
+    <button class="emoji-opt" data-emoji="💋">💋</button>
+    <button class="emoji-opt" data-emoji="🤬">🤬</button>
+  </div>
+
+  <div id="color-picker" class="floating-picker color-picker">
+    <button class="color-opt active" data-color="#ff3b3b" style="--c:#ff3b3b"></button>
+    <button class="color-opt" data-color="#ff9f1c" style="--c:#ff9f1c"></button>
+    <button class="color-opt" data-color="#ffe066" style="--c:#ffe066"></button>
+    <button class="color-opt" data-color="#2ecc71" style="--c:#2ecc71"></button>
+    <button class="color-opt" data-color="#3b82f6" style="--c:#3b82f6"></button>
+    <button class="color-opt" data-color="#a855f7" style="--c:#a855f7"></button>
+    <button class="color-opt" data-color="#ec4899" style="--c:#ec4899"></button>
+    <button class="color-opt" data-color="#111111" style="--c:#111111"></button>
+    <button class="color-opt" data-color="#ffffff" style="--c:#ffffff"></button>
+    <button id="btn-draw-exit" class="color-opt exit-opt" title="Kapat">✕</button>
+  </div>
+
+  <svg id="draw-layer"></svg>
+
+  <div id="emoji-rain-layer"></div>
+  <div id="puzzle-wrap">
+    <div id="puzzle-board"></div>
+    <div id="puzzle-scatter"></div>
+  </div>
+</div>
+
+<div id="screen-win" class="screen">
+  <div class="card">
+    <h1>🎉 Tebrikler!</h1>
+    <p>Puzzle'ı birlikte tamamladınız.</p>
+    <div id="win-time"></div>
+    <button id="btn-again" class="btn primary">Yeni Puzzle</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
